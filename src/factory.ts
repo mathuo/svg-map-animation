@@ -104,7 +104,7 @@ export class Factory {
     this.redraw({ x, y });
   }
 
-  redraw(kvargs) {
+  public redraw(kvargs: { scale?: number; x?: number; y?: number }) {
     const { scale, x, y } = kvargs;
 
     if (scale !== undefined) {
@@ -122,14 +122,18 @@ export class Factory {
       this.y = y;
     }
 
-    this.transformMatrix[4] = (1 - this.scale) * this.x;
-    this.transformMatrix[5] = (1 - this.scale) * this.y;
+    const { height, width } = this.svg.getBoundingClientRect();
+
+    this.transformMatrix[4] =
+      Math.min(0, width / 2 - this.x) + (1 - this.scale) * this.x;
+    this.transformMatrix[5] =
+      Math.min(0, height / 2 - this.y) + (1 - this.scale) * this.y;
 
     const newMatrix = "matrix(" + this.transformMatrix.join(" ") + ")";
     this.matrixGroup.setAttributeNS(null, "transform", newMatrix);
   }
 
-  airplane = undefined;
+  activeIcon = undefined;
 
   moveTrailPathToPercentage(percentage) {
     let normPerc = percentage;
@@ -217,18 +221,18 @@ export class Factory {
           }
         }
 
-        if (!this.airplane && s.icon) {
-          this.airplane = this.getAirplane();
+        if (!this.activeIcon && s.icon) {
+          this.activeIcon = this.getIcon(s.icon);
           this.matrixGroup.insertBefore(
-            this.airplane,
+            this.activeIcon,
             this.svg.getElementById("trail-path")
           );
-        } else if (this.airplane && s.icon) {
+        } else if (this.activeIcon && s.icon) {
           // this.airplane = this.svg.getElementById("airplane");
         }
 
         if (cameraPoint) {
-          const dim = this.airplane.getBoundingClientRect();
+          const dim = this.activeIcon.getBoundingClientRect();
 
           const viewBox = this.svg
             .getAttribute("viewBox")
@@ -255,21 +259,21 @@ export class Factory {
             rotate(${(-180 * angle) / Math.PI}, 12,12)`
           );
         } else {
-          const dim = this.airplane.getBoundingClientRect();
+          const dim = this.activeIcon.getBoundingClientRect();
 
-          this.airplane.setAttribute("x", pos.x - dim.width / 2);
-          this.airplane.setAttribute("y", pos.y - dim.height / 2);
+          this.activeIcon.setAttribute("x", pos.x - dim.width / 2);
+          this.activeIcon.setAttribute("y", pos.y - dim.height / 2);
 
-          const el = this.airplane.getElementById("airplane-path");
+          const el = this.activeIcon.getElementById("airplane-path");
           el.setAttribute(
             "transform",
             `scale(${iconScale}) rotate(${(-180 * angle) / Math.PI},12,12)`
           );
         }
       } else {
-        if (this.airplane) {
-          this.airplane.remove();
-          this.airplane = undefined;
+        if (this.activeIcon) {
+          this.activeIcon.remove();
+          this.activeIcon = undefined;
         }
 
         if (
@@ -317,7 +321,8 @@ export class Factory {
     return this.cameraPath.getPointAtLength(this.cameraPathLength * percentage);
   }
 
-  getAirplane() {
+  getIcon(path: string) {
+    // hardcode an airplane until path loading fix
     const g1 = document.createElementNS("http://www.w3.org/2000/svg", "g");
     g1.id = "airplane";
     const g2 = document.createElementNS("http://www.w3.org/2000/svg", "path");

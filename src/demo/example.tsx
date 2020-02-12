@@ -1,41 +1,8 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import { IPathSection, Factory } from "./factory";
-
-const weights: IPathSection[] = [
-  {
-    weight: 0,
-    zoom: [1.2]
-  },
-  {
-    weight: 8,
-    zoom: [1.2, 1.4, 1.6, 2],
-    icon: "/src/airplane.svg",
-    iconZoom: [2, 1.5, 1, 1, 1, 1, 1, 0]
-  },
-  {
-    weight: 2,
-    zoom: [2, 3]
-  },
-  {
-    weight: 2,
-    zoom: [3]
-  },
-  {
-    weight: 6,
-    zoom: [3, 4]
-  },
-  {
-    weight: 3,
-    zoom: [4, 2]
-  },
-  {
-    weight: 4,
-    zoom: [2, 1.6, 1.4, 1.2],
-    icon: "/src/airplane.svg",
-    iconZoom: [1, 1.5, 2, 2, 2]
-  }
-];
+import { Factory } from "../factory";
+import weights from "./weights/japan";
+import { clamp } from "../math";
 
 const App = () => {
   const factory = React.useRef<Factory>();
@@ -47,7 +14,7 @@ const App = () => {
     if (Number.isNaN(n)) {
       return;
     }
-    setRange(n);
+    setRange(clamp(0, 100)(n));
   };
 
   const refCb = (ref: HTMLObjectElement) => {
@@ -85,6 +52,7 @@ const App = () => {
       <div
         style={{
           padding: "10px",
+          marginBottom: "10px",
           backgroundColor: "lightgreen"
         }}
       >
@@ -100,7 +68,7 @@ const App = () => {
         />
       </div>
       <div id="map-container">
-        <object ref={refCb} data="japan.svg" />
+        <object ref={refCb} data="/japan.svg" />
       </div>
     </div>
   );
