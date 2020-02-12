@@ -36,7 +36,7 @@ const weights: IPathSection[] = [
 ];
 
 const el = document.getElementById("svg-el");
-const helper = new Factory(null, el, weights);
+const helper = new Factory(null, el as any, weights);
 
 const inputEl = document.getElementById("input");
 inputEl.oninput = (ev: any) => {

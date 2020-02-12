@@ -42,7 +42,7 @@ const App = () => {
 
     factory.current = new Factory(
       document.getElementById("map-container"),
-      svgDocument,
+      svgDocument as any,
       weights
     );
   }, [svgDocument]);

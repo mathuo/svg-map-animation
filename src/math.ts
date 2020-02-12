@@ -1,35 +1,34 @@
-function getPointAtLength(path, length) {
-  let p = path.getPointAtLength(length);
-  return { x: p.x, y: p.y };
-}
+export type Point = { x: number; y: number };
 
-function getLength(path) {
-  return path.getTotalLength();
-}
+const getPointAtLength = (path: SVGPathElement, length: number) => {
+  const p = path.getPointAtLength(length);
+  return { x: p.x, y: p.y } as Point;
+};
 
-function distance(pointA, pointB) {
-  // let d = sub(pointA, pointB);
-  let d = { x: pointA.x - pointB.x, y: pointA.y - pointB.y };
+const getLength = (path: SVGPathElement) => path.getTotalLength();
+
+function distance(pointA: Point, pointB: Point) {
+  const d = { x: pointA.x - pointB.x, y: pointA.y - pointB.y };
   return Math.sqrt(d.x * d.x + d.y * d.y);
 }
 
 export function getLengthAtPoint(
-  path,
-  point,
+  path: SVGPathElement,
+  point: Point,
   subdivisionsPerIteration = 10,
   iterations = 5
 ) {
   let pathLength = getLength(path);
 
-  return (function iterate(lower, upper) {
-    let delta = upper - lower;
-    let step = delta / (subdivisionsPerIteration - 1);
+  const iterate = (lower: number, upper: number) => {
+    const delta = upper - lower;
+    const step = delta / (subdivisionsPerIteration - 1);
 
-    let subdivisions = Array.from(Array(subdivisionsPerIteration))
+    const subdivisions = Array.from(Array(subdivisionsPerIteration))
       .map((v, i) => {
-        let subLength = lower + step * i;
-        let subPoint = getPointAtLength(path, subLength);
-        let subDistance = distance(point, subPoint);
+        const subLength = lower + step * i;
+        const subPoint = getPointAtLength(path, subLength);
+        const subDistance = distance(point, subPoint);
         return {
           length: subLength,
           point: subPoint,
@@ -45,7 +44,9 @@ export function getLengthAtPoint(
     const result = subdivisions.sort((a, b) => a - b);
 
     return iterate(result[0], result[1]);
-  })(0, pathLength);
+  };
+
+  return iterate(0, pathLength);
 }
 
 export function lerp(v0: number, v1: number, t: number) {

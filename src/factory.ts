@@ -1,4 +1,4 @@
-import { getLengthAtPoint, lerp } from "./math";
+import { getLengthAtPoint, lerp, Point } from "./math";
 
 export interface IPathSection {
   zoom?: number[];
@@ -11,37 +11,42 @@ interface IPathSectionInternal extends IPathSection {
   normalizedWeight: number;
 }
 
+interface IPoint {
+  pos: number;
+  length: number;
+  on: () => void;
+  off: () => void;
+}
+
 export class Factory {
   private transformMatrix: number[];
-  private viewbox: any[];
-  private matrixGroup: SVGElement;
+  private matrixGroup: HTMLElement;
   private trailPath: SVGPathElement;
   private trailPathLength: number;
   private cameraPath: SVGPathElement;
   private cameraPathLength: number;
-  private points: any[];
+  private points: IPoint[];
   private scale: number;
   private x: number;
   private y: number;
   private sections: IPathSectionInternal[];
   private icons: HTMLImageElement[];
   private activeIconIndex = -1;
-  private previousPosition: { x: number; y: number };
+  private previousPosition: Point;
   private previousPercentage: number;
-  // private container: HTMLElement;
+  private activeIcon = undefined;
 
   public static TRANSFORM_MATRIX = [1, 0, 0, 1, 0, 0];
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly svg: any,
+    private readonly svg: SVGElement & Pick<Document, "getElementById">, // not sure where getElementById comes from but it's there
     weights: IPathSection[],
     private readonly disableCameraPath = false
   ) {
-    this.transformMatrix = [...Factory.TRANSFORM_MATRIX];
-    // this.viewbox = svg.getAttributeNS(null, "viewBox").split(" ");
-    this.matrixGroup = svg.getElementById("matrix-group");
+    this.transformMatrix = [...Factory.TRANSFORM_MATRIX]; // re-assign as to not modify original
 
+    this.matrixGroup = svg.getElementById("matrix-group");
     this.trailPath = svg.querySelector("#trail-path path");
 
     if (!this.trailPath) {
@@ -52,8 +57,7 @@ export class Factory {
 
     if (!this.disableCameraPath) {
       this.cameraPath = svg.querySelector("#camera-path path");
-      this.cameraPathLength =
-        this.cameraPath && this.cameraPath.getTotalLength();
+      this.cameraPathLength = this.cameraPath?.getTotalLength();
     }
 
     this.icons = weights.map(x => {
@@ -122,20 +126,18 @@ export class Factory {
       this.y = y;
     }
 
-    const { height, width } = this.svg.getBoundingClientRect();
+    const { width: w, height: h } = this.getViewBoxDimensions();
 
     this.transformMatrix[4] =
-      Math.min(0, width / 2 - this.x) + (1 - this.scale) * this.x;
+      Math.min(0, w / 2 - this.x) + (1 - this.scale) * this.x;
     this.transformMatrix[5] =
-      Math.min(0, height / 2 - this.y) + (1 - this.scale) * this.y;
+      Math.min(0, h / 2 - this.y) + (1 - this.scale) * this.y;
 
     const newMatrix = "matrix(" + this.transformMatrix.join(" ") + ")";
     this.matrixGroup.setAttributeNS(null, "transform", newMatrix);
   }
 
-  activeIcon = undefined;
-
-  moveTrailPathToPercentage(percentage) {
+  public moveTrailPathToPercentage(percentage: number) {
     let normPerc = percentage;
     let scale: number = 1;
     let pos: { x: number; y: number };
@@ -184,7 +186,6 @@ export class Factory {
           this.container.removeChild(this.icons[this.activeIconIndex]);
         }
 
-        // container.appendChild(this.icons[j + 1]);
         this.activeIconIndex = j + 1;
 
         const icon = this.icons[j + 1];
@@ -234,12 +235,10 @@ export class Factory {
         if (cameraPoint) {
           const dim = this.activeIcon.getBoundingClientRect();
 
-          const viewBox = this.svg
-            .getAttribute("viewBox")
-            .split(" ")
-            .map(Number.parseFloat);
-          const vbWidth = viewBox[2];
-          const vbHeight = viewBox[3];
+          const {
+            width: vbWidth,
+            height: vbHeight
+          } = this.getViewBoxDimensions();
 
           const {
             width: elWidth,
@@ -313,15 +312,20 @@ export class Factory {
     });
   }
 
-  getPointOnTrailPath(percentage) {
+  private getViewBoxDimensions() {
+    const viewbox = this.svg.getAttribute("viewBox").split(/\s+|,/);
+    return { height: Number(viewbox[3]), width: Number(viewbox[2]) };
+  }
+
+  private getPointOnTrailPath(percentage: number) {
     return this.trailPath.getPointAtLength(this.trailPathLength * percentage);
   }
 
-  getPointOnCameraPath(percentage) {
+  private getPointOnCameraPath(percentage: number) {
     return this.cameraPath.getPointAtLength(this.cameraPathLength * percentage);
   }
 
-  getIcon(path: string) {
+  private getIcon(path: string) {
     // hardcode an airplane until path loading fix
     const g1 = document.createElementNS("http://www.w3.org/2000/svg", "g");
     g1.id = "airplane";
