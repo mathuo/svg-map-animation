@@ -18,6 +18,14 @@ interface IPoint {
   off: () => void;
 }
 
+const Consts = {
+  CameraPath: "camera-path",
+  TrailPath: "trail-path",
+  Locations: "locations",
+  TrailIcon: "trail-icon",
+  Group: "matrix-group"
+};
+
 export class Factory {
   private matrixGroup: HTMLElement;
   private trailPath: SVGPathElement;
@@ -29,48 +37,29 @@ export class Factory {
   private x: number;
   private y: number;
   private sections: IPathSectionInternal[];
-  private icons: HTMLImageElement[];
   private activeIconIndex = -1;
   private previousPosition: Point;
   private previousPercentage: number;
   private activeIcon = undefined;
 
   constructor(
-    private readonly container: HTMLElement,
     private readonly svg: SVGElement & Pick<Document, "getElementById">, // not sure where getElementById comes from but it's there
     weights: IPathSection[],
     private readonly disableCameraPath = false
   ) {
-    this.matrixGroup = svg.getElementById("matrix-group");
-    this.trailPath = svg.querySelector("#trail-path path");
+    this.matrixGroup = svg.getElementById(Consts.Group);
+    this.trailPath = svg.querySelector(`#${Consts.TrailPath} path`);
 
     if (!this.trailPath) {
-      throw new Error("#trail-path path is missing");
+      throw new Error(`#${Consts.TrailPath} path is missing`);
     }
-
-    // const i = this.getIcon("./airplane.svg");
-    // let d = 0;
-    // this.matrixGroup.appendChild(i);
-    // setInterval(() => {
-    //   i.setAttribute("transform", `translate(0 0) rotate(${d++} 10 10)`);
-    // }, 10);
 
     this.trailPathLength = this.trailPath.getTotalLength();
 
     if (!this.disableCameraPath) {
-      this.cameraPath = svg.querySelector("#camera-path path");
+      this.cameraPath = svg.querySelector(`#${Consts.CameraPath} path`);
       this.cameraPathLength = this.cameraPath?.getTotalLength();
     }
-
-    this.icons = weights.map(x => {
-      if (x.icon) {
-        const img = document.createElement("img");
-        img.setAttribute("src", x.icon);
-        img.style.position = "absolute";
-        return img;
-      }
-      return undefined;
-    });
 
     if (weights) {
       const sum = weights.reduce((x, y) => x + y.weight, 0);
@@ -83,7 +72,7 @@ export class Factory {
     const { x, y } = this.trailPath.getPointAtLength(0);
 
     this.points = [];
-    const points = svg.querySelectorAll("#locations circle");
+    const points = svg.querySelectorAll(`#${Consts.Locations} circle`);
     for (const point of points) {
       const { cx, cy } = {
         cx: parseFloat(point.getAttribute("cx")),
@@ -189,12 +178,12 @@ export class Factory {
           this.activeIcon = this.getIcon(section.icon);
           this.matrixGroup.insertBefore(
             this.activeIcon,
-            this.svg.getElementById("trail-path")
+            this.svg.getElementById(Consts.TrailPath)
           );
         }
 
-        const icon = this.icons[this.activeIconIndex];
-        const { height: iconHeight, width: iconWidth } = icon;
+        const el = this.svg.querySelector(`#${Consts.TrailIcon}`);
+        const { height: iconHeight, width: iconWidth } = (el as any).getBBox();
 
         const currentPoint: Point = {
           x: trailPoint.x - iconWidth / 2,
@@ -218,8 +207,6 @@ export class Factory {
         );
 
         const point = hasCameraPath ? currentPoint : trailPoint;
-
-        const el = this.svg.querySelector("#trail-icon");
 
         el.setAttribute(
           "transform",
@@ -344,7 +331,7 @@ export class Factory {
       "image"
     );
     image.setAttribute("href", url);
-    image.id = "trail-icon";
+    image.id = Consts.TrailIcon;
     return image;
   }
 }
