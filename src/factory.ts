@@ -19,7 +19,6 @@ interface IPoint {
 }
 
 export class Factory {
-  private transformMatrix: number[];
   private matrixGroup: HTMLElement;
   private trailPath: SVGPathElement;
   private trailPathLength: number;
@@ -36,22 +35,25 @@ export class Factory {
   private previousPercentage: number;
   private activeIcon = undefined;
 
-  public static TRANSFORM_MATRIX = [1, 0, 0, 1, 0, 0];
-
   constructor(
     private readonly container: HTMLElement,
     private readonly svg: SVGElement & Pick<Document, "getElementById">, // not sure where getElementById comes from but it's there
     weights: IPathSection[],
     private readonly disableCameraPath = false
   ) {
-    this.transformMatrix = [...Factory.TRANSFORM_MATRIX]; // re-assign as to not modify original
-
     this.matrixGroup = svg.getElementById("matrix-group");
     this.trailPath = svg.querySelector("#trail-path path");
 
     if (!this.trailPath) {
       throw new Error("#trail-path path is missing");
     }
+
+    // const i = this.getIcon("./airplane.svg");
+    // let d = 0;
+    // this.matrixGroup.appendChild(i);
+    // setInterval(() => {
+    //   i.setAttribute("transform", `translate(0 0) rotate(${d++} 10 10)`);
+    // }, 10);
 
     this.trailPathLength = this.trailPath.getTotalLength();
 
@@ -113,9 +115,6 @@ export class Factory {
 
     if (scale !== undefined) {
       this.scale = scale;
-      for (let i = 0; i < 4; i++) {
-        this.transformMatrix[i] = Factory.TRANSFORM_MATRIX[i] * this.scale;
-      }
     }
 
     if (x !== undefined) {
@@ -128,180 +127,136 @@ export class Factory {
 
     const { width: w, height: h } = this.getViewBoxDimensions();
 
-    this.transformMatrix[4] =
-      Math.min(0, w / 2 - this.x) + (1 - this.scale) * this.x;
-    this.transformMatrix[5] =
-      Math.min(0, h / 2 - this.y) + (1 - this.scale) * this.y;
+    // unit transform matrix is [1, 0, 0, 1, 0, 0]
+    const transform = `matrix(${this.scale} 0 0 ${this.scale} ${Math.min(
+      0,
+      w / 2 - this.x
+    ) +
+      (1 - this.scale) * this.x} ${Math.min(0, h / 2 - this.y) +
+      (1 - this.scale) * this.y})`;
 
-    const newMatrix = "matrix(" + this.transformMatrix.join(" ") + ")";
-    this.matrixGroup.setAttributeNS(null, "transform", newMatrix);
+    this.matrixGroup.setAttribute("transform", transform);
   }
 
   public moveTrailPathToPercentage(percentage: number) {
+    const hasCameraPath = !!this.cameraPath;
     let normPerc = percentage;
-    let scale: number = 1;
-    let pos: { x: number; y: number };
+    let pageScale: number = 1;
+    let trailPoint: { x: number; y: number };
 
-    let cameraPoint = this.cameraPath && this.getPointOnCameraPath(normPerc);
+    let cameraPoint: DOMPoint;
 
     if (this.sections) {
       let total = 0;
-      let j = 0;
-      let k = 0;
+      let sectionIndex = 0;
+      let sectionPercentageProgress = 0;
       for (let i = 0; i < this.sections.length; i++) {
         const next = total + this.sections[i].normalizedWeight;
         if (next >= percentage) {
-          k = (percentage - total) / this.sections[i].normalizedWeight;
+          sectionPercentageProgress =
+            this.sections[i].normalizedWeight === 0
+              ? 0
+              : (percentage - total) / this.sections[i].normalizedWeight;
           break;
         }
-        j = i;
+        sectionIndex = i;
         total = next;
       }
 
       normPerc =
-        this.points[j].pos + k * (this.points[j + 1].pos - this.points[j].pos);
-      pos = this.getPointOnTrailPath(normPerc);
-      cameraPoint = this.cameraPath && this.getPointOnCameraPath(normPerc);
+        this.points[sectionIndex].pos +
+        sectionPercentageProgress *
+          (this.points[sectionIndex + 1].pos - this.points[sectionIndex].pos);
+      trailPoint = this.getPointOnTrailPath(normPerc);
+      cameraPoint = this.getPointOnCameraPath(normPerc);
 
-      const s = this.sections[j + 1];
-      if (s.zoom) {
-        const items = s.zoom;
-        const before = Math.floor(Math.max(items.length - 1, 0) * k);
-        if (before === items.length - 1) {
-          scale = items[items.length - 1];
-        } else {
-          const t = (items.length - 1) * k - before;
-          const x0 = items[before];
-          const x1 = items[before + 1];
-          scale = x0 > x1 ? lerp(x0, x1, t) : lerp(x1, x0, 1 - t);
-        }
-      }
+      const section = this.sections[sectionIndex + 1];
+      pageScale = this.getPageZoom(section, sectionPercentageProgress);
 
-      if (s.icon) {
-        if (
-          this.activeIconIndex > 0 &&
-          this.activeIconIndex !== j + 1 &&
-          this.container.contains(this.icons[this.activeIconIndex])
-        ) {
-          this.container.removeChild(this.icons[this.activeIconIndex]);
+      if (section.icon) {
+        const iconScale = this.getIconScale(section, sectionPercentageProgress);
+        const isIconStale =
+          this.activeIconIndex > 0 && this.activeIconIndex !== sectionIndex + 1;
+
+        if (isIconStale) {
+          this.activeIcon.remove();
+          this.activeIcon = undefined;
+          this.activeIconIndex = -1;
         }
 
-        this.activeIconIndex = j + 1;
-
-        const icon = this.icons[j + 1];
-
-        const current = {
-          x: pos.x - icon.width / 2,
-          y: pos.y - icon.height / 2
-        };
-        const previous = this.previousPosition
-          ? {
-              x: this.previousPosition.x - icon.width / 2,
-              y: this.previousPosition.y - icon.height / 2
-            }
-          : pos;
-
-        const isForward = this.previousPercentage < normPerc;
-        let angle = Math.atan2(
-          isForward ? previous.x - current.x : current.x - previous.x,
-          isForward ? previous.y - current.y : current.y - previous.y
-        );
-
-        let iconScale = 1;
-
-        if (s.iconZoom) {
-          const items = s.iconZoom;
-          const before = Math.floor(Math.max(items.length - 1, 0) * k);
-          if (before === items.length - 1) {
-            iconScale = items[items.length - 1];
-          } else {
-            const t = (items.length - 1) * k - before;
-            const x0 = items[before];
-            const x1 = items[before + 1];
-            iconScale = x0 > x1 ? lerp(x0, x1, t) : lerp(x1, x0, 1 - t);
-          }
-        }
-
-        if (!this.activeIcon && s.icon) {
-          this.activeIcon = this.getIcon(s.icon);
+        if (!this.activeIcon) {
+          this.activeIconIndex = sectionIndex + 1;
+          this.activeIcon = this.getIcon(section.icon);
           this.matrixGroup.insertBefore(
             this.activeIcon,
             this.svg.getElementById("trail-path")
           );
-        } else if (this.activeIcon && s.icon) {
-          // this.airplane = this.svg.getElementById("airplane");
         }
 
-        if (cameraPoint) {
-          const dim = this.activeIcon.getBoundingClientRect();
+        const icon = this.icons[this.activeIconIndex];
+        const { height: iconHeight, width: iconWidth } = icon;
 
-          const {
-            width: vbWidth,
-            height: vbHeight
-          } = this.getViewBoxDimensions();
+        const currentPoint: Point = {
+          x: trailPoint.x - iconWidth / 2,
+          y: trailPoint.y - iconHeight / 2
+        };
+        const previousPoint: Point = this.previousPosition
+          ? {
+              x: this.previousPosition.x - iconWidth / 2,
+              y: this.previousPosition.y - iconHeight / 2
+            }
+          : currentPoint;
 
-          const {
-            width: elWidth,
-            height: elHeight
-          } = this.svg.getBoundingClientRect();
+        const isIncreasing = normPerc > this.previousPercentage;
+        const iconAngleAsRadians = -Math.atan2(
+          isIncreasing
+            ? previousPoint.x - currentPoint.x
+            : currentPoint.x - previousPoint.x,
+          isIncreasing
+            ? previousPoint.y - currentPoint.y
+            : currentPoint.y - previousPoint.y
+        );
 
-          const aspectXScale = elWidth / vbWidth;
-          const aspectYScale = elHeight / vbHeight;
+        const point = hasCameraPath ? currentPoint : trailPoint;
 
-          const x = pos.x - dim.width / (2 * aspectXScale * this.scale);
-          const y = pos.y - dim.height / (2 * aspectYScale * this.scale);
+        const el = this.svg.querySelector("#trail-icon");
 
-          const el = this.svg.querySelector("#airplane path");
-          el.setAttribute(
-            "transform",
-            `translate(${x}, ${y}) scale(${iconScale}) 
-            rotate(${(-180 * angle) / Math.PI}, 12,12)`
-          );
-        } else {
-          const dim = this.activeIcon.getBoundingClientRect();
-
-          this.activeIcon.setAttribute("x", pos.x - dim.width / 2);
-          this.activeIcon.setAttribute("y", pos.y - dim.height / 2);
-
-          const el = this.activeIcon.getElementById("airplane-path");
-          el.setAttribute(
-            "transform",
-            `scale(${iconScale}) rotate(${(-180 * angle) / Math.PI},12,12)`
-          );
-        }
-      } else {
-        if (this.activeIcon) {
-          this.activeIcon.remove();
-          this.activeIcon = undefined;
-        }
-
-        if (
-          this.activeIconIndex > 0 &&
-          this.container.contains(this.icons[this.activeIconIndex])
-        ) {
-          this.container.removeChild(this.icons[this.activeIconIndex]);
-          this.activeIconIndex = -1;
-        }
+        el.setAttribute(
+          "transform",
+          // `translate(${point.x} ${point.y}) rotate(${(iconAngleAsRadians * 180) / Math.PI} ${iconWidth/2} ${iconHeight/2}) scale(${iconScale}) `
+          this.getTransformMatrix(
+            point.x,
+            point.y,
+            iconWidth / 2,
+            iconHeight / 2,
+            iconScale,
+            iconScale,
+            iconAngleAsRadians
+          )
+        );
+      } else if (this.activeIcon) {
+        this.activeIcon.remove();
+        this.activeIcon = undefined;
+        this.activeIconIndex = -1;
       }
     } else {
-      pos = this.getPointOnTrailPath(normPerc);
+      trailPoint = this.getPointOnTrailPath(normPerc);
+      cameraPoint = this.getPointOnCameraPath(normPerc);
     }
 
-    if (this.cameraPath) {
-      const p = this.cameraPathLength * normPerc + " " + this.cameraPathLength;
-      this.cameraPath.setAttribute("stroke-dasharray", p);
+    if (hasCameraPath) {
+      const cameraPathStroke =
+        this.cameraPathLength * normPerc + " " + this.cameraPathLength;
+      this.cameraPath.setAttribute("stroke-dasharray", cameraPathStroke); //stroke-width for width
 
-      this.redraw({ x: cameraPoint.x, y: cameraPoint.y, scale });
+      this.redraw({ x: cameraPoint.x, y: cameraPoint.y, scale: pageScale });
     } else {
-      this.redraw({ x: pos.x, y: pos.y, scale });
+      this.redraw({ x: trailPoint.x, y: trailPoint.y, scale: pageScale });
     }
 
-    this.previousPosition = pos;
-    this.previousPercentage = normPerc;
-
-    const portion =
+    const trailPathStroke =
       this.trailPathLength * normPerc + " " + this.trailPathLength;
-    this.trailPath.setAttribute("stroke-dasharray", portion);
+    this.trailPath.setAttribute("stroke-dasharray", trailPathStroke); //stroke-width for width
 
     this.points.forEach(x => {
       if (x.pos > normPerc) {
@@ -310,6 +265,62 @@ export class Factory {
         x.on();
       }
     });
+
+    this.previousPosition = trailPoint;
+    this.previousPercentage = normPerc;
+  }
+
+  private getTransformMatrix(
+    dx: number,
+    dy: number,
+    cx: number,
+    cy: number,
+    sx: number,
+    sy: number,
+    angle: number
+  ) {
+    // (sx × cos(a),
+    // sy × sin(a),
+    // -sx × sin(a),
+    // sy × cos(a),
+    // (-cx × cos(a) + cy × sin(a) + cx) × sx + tx + cx x (1 - sx),
+    // (-cx × sin(a) - cy × cos(a) + cy) × sy + ty + cy x (1 - sy))
+
+    return `matrix(
+        ${sx * Math.cos(angle)} 
+        ${sy * Math.sin(angle)}
+        ${-sx * Math.sin(angle)} 
+        ${sy * Math.cos(angle)} 
+        ${(-cx * Math.cos(angle) + cy * Math.sin(angle) + cx) * sx +
+          dx +
+          cx * (1 - sx)} 
+        ${(-cx * Math.sin(angle) - cy * Math.cos(angle) + cy) * sy +
+          dy +
+          cy * (1 - sy)})`;
+  }
+
+  private getIconScale(s: IPathSectionInternal, k: number) {
+    return this.getZoom(s?.iconZoom, k);
+  }
+
+  private getPageZoom(s: IPathSectionInternal, k: number) {
+    return this.getZoom(s?.zoom, k);
+  }
+
+  private getZoom(items: number[], k: number) {
+    if (!items) {
+      return 1;
+    }
+
+    const before = Math.floor(Math.max(items.length - 1, 0) * k);
+    if (before === items.length - 1) {
+      return items[items.length - 1];
+    } else {
+      const t = (items.length - 1) * k - before;
+      const x0 = items[before];
+      const x1 = items[before + 1];
+      return x0 > x1 ? lerp(x0, x1, t) : lerp(x1, x0, 1 - t);
+    }
   }
 
   private getViewBoxDimensions() {
@@ -322,21 +333,18 @@ export class Factory {
   }
 
   private getPointOnCameraPath(percentage: number) {
-    return this.cameraPath.getPointAtLength(this.cameraPathLength * percentage);
+    return this.cameraPath?.getPointAtLength(
+      this.cameraPathLength * percentage
+    );
   }
 
-  private getIcon(path: string) {
-    // hardcode an airplane until path loading fix
-    const g1 = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    g1.id = "airplane";
-    const g2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    g2.id = "airplane-path";
-    g2.setAttribute(
-      "d",
-      "M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"
+  private getIcon(url: string) {
+    const image = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "image"
     );
-    g2.setAttribute("fill", "#000");
-    g1.appendChild(g2);
-    return g1;
+    image.setAttribute("href", url);
+    image.id = "trail-icon";
+    return image;
   }
 }
