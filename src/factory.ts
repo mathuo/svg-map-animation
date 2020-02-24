@@ -26,28 +26,39 @@ const Consts = {
   Group: "matrix-group"
 };
 
-export class Factory {
-  private matrixGroup: HTMLElement;
+export interface IFactory {
+  redraw: (kvargs: { scale?: number; x?: number; y?: number }) => void;
+  moveTrailPathToPercentage: (percentage: number) => void;
+}
+
+export class Factory implements IFactory {
+  private container: SVGElement;
+  //
   private trailPath: SVGPathElement;
   private trailPathLength: number;
+  //
   private cameraPath: SVGPathElement;
   private cameraPathLength: number;
+  //
+  private sections: IPathSectionInternal[];
   private points: IPoint[];
-  private scale: number;
+  //
   private x: number;
   private y: number;
-  private sections: IPathSectionInternal[];
+  private scale: number;
+  //
   private activeIconIndex = -1;
+  private activeIcon: SVGImageElement;
+  //
   private previousPosition: Point;
   private previousPercentage: number;
-  private activeIcon = undefined;
 
   constructor(
-    private readonly svg: SVGElement & Pick<Document, "getElementById">, // not sure where getElementById comes from but it's there
+    private readonly svg: SVGElement,
     weights: IPathSection[],
     private readonly disableCameraPath = false
   ) {
-    this.matrixGroup = svg.getElementById(Consts.Group);
+    this.container = svg.querySelector(`#${Consts.Group}`);
     this.trailPath = svg.querySelector(`#${Consts.TrailPath} path`);
 
     if (!this.trailPath) {
@@ -62,40 +73,16 @@ export class Factory {
     }
 
     if (weights) {
-      const sum = weights.reduce((x, y) => x + y.weight, 0);
-      this.sections = weights.map(x => ({
-        ...x,
-        normalizedWeight: x.weight / sum
-      }));
+      this.sections = this.createSections(weights);
     }
 
-    const { x, y } = this.trailPath.getPointAtLength(0);
-
-    this.points = [];
-    const points = svg.querySelectorAll(`#${Consts.Locations} circle`);
-    for (const point of points) {
-      const { cx, cy } = {
-        cx: parseFloat(point.getAttribute("cx")),
-        cy: parseFloat(point.getAttribute("cy"))
-      };
-      const length = getLengthAtPoint(this.trailPath, { x: cx, y: cy });
-
-      const obj = {
-        pos: length / this.trailPathLength,
-        length,
-        on: () => point.setAttribute("fill", "red"),
-        off: () => point.setAttribute("fill", "blue")
-      };
-
-      this.points.push(obj);
-    }
-
-    this.points = this.points.sort((a, b) => a.pos - b.pos);
+    this.points = this.createPoints();
 
     if (this.sections && this.sections.length !== this.points.length) {
       throw new Error("sections.lenth !== points.length");
     }
 
+    const { x, y } = this.trailPath.getPointAtLength(0);
     this.redraw({ x, y });
   }
 
@@ -124,7 +111,7 @@ export class Factory {
       (1 - this.scale) * this.x} ${Math.min(0, h / 2 - this.y) +
       (1 - this.scale) * this.y})`;
 
-    this.matrixGroup.setAttribute("transform", transform);
+    this.container.setAttribute("transform", transform);
   }
 
   public moveTrailPathToPercentage(percentage: number) {
@@ -136,21 +123,10 @@ export class Factory {
     let cameraPoint: DOMPoint;
 
     if (this.sections) {
-      let total = 0;
-      let sectionIndex = 0;
-      let sectionPercentageProgress = 0;
-      for (let i = 0; i < this.sections.length; i++) {
-        const next = total + this.sections[i].normalizedWeight;
-        if (next >= percentage) {
-          sectionPercentageProgress =
-            this.sections[i].normalizedWeight === 0
-              ? 0
-              : (percentage - total) / this.sections[i].normalizedWeight;
-          break;
-        }
-        sectionIndex = i;
-        total = next;
-      }
+      const {
+        sectionIndex,
+        sectionPercentageProgress
+      } = this.getSectionMetadata(percentage);
 
       normPerc =
         this.points[sectionIndex].pos +
@@ -176,14 +152,16 @@ export class Factory {
         if (!this.activeIcon) {
           this.activeIconIndex = sectionIndex + 1;
           this.activeIcon = this.getIcon(section.icon);
-          this.matrixGroup.insertBefore(
+          this.container.insertBefore(
             this.activeIcon,
-            this.svg.getElementById(Consts.TrailPath)
+            this.svg.querySelector(`#${Consts.TrailPath}`)
           );
         }
 
-        const el = this.svg.querySelector(`#${Consts.TrailIcon}`);
-        const { height: iconHeight, width: iconWidth } = (el as any).getBBox();
+        const el = this.svg.querySelector(
+          `#${Consts.TrailIcon}`
+        ) as SVGGraphicsElement;
+        const { height: iconHeight, width: iconWidth } = el.getBBox();
 
         const currentPoint: Point = {
           x: trailPoint.x - iconWidth / 2,
@@ -210,7 +188,6 @@ export class Factory {
 
         el.setAttribute(
           "transform",
-          // `translate(${point.x} ${point.y}) rotate(${(iconAngleAsRadians * 180) / Math.PI} ${iconWidth/2} ${iconHeight/2}) scale(${iconScale}) `
           this.getTransformMatrix(
             point.x,
             point.y,
@@ -255,6 +232,25 @@ export class Factory {
 
     this.previousPosition = trailPoint;
     this.previousPercentage = normPerc;
+  }
+
+  private getSectionMetadata(percentage: number) {
+    let total = 0;
+    let sectionIndex = 0;
+    let sectionPercentageProgress = 0;
+    for (let i = 0; i < this.sections.length; i++) {
+      const next = total + this.sections[i].normalizedWeight;
+      if (next >= percentage) {
+        sectionPercentageProgress =
+          this.sections[i].normalizedWeight === 0
+            ? 0
+            : (percentage - total) / this.sections[i].normalizedWeight;
+        break;
+      }
+      sectionIndex = i;
+      total = next;
+    }
+    return { sectionIndex, sectionPercentageProgress };
   }
 
   private getTransformMatrix(
@@ -333,5 +329,36 @@ export class Factory {
     image.setAttribute("href", url);
     image.id = Consts.TrailIcon;
     return image;
+  }
+
+  private createSections(weights: IPathSection[]) {
+    const sum = weights.reduce((x, y) => x + y.weight, 0);
+    return weights.map(x => ({
+      ...x,
+      normalizedWeight: x.weight / sum
+    }));
+  }
+
+  private createPoints() {
+    const points = [];
+    const svgPoints = this.svg.querySelectorAll(`#${Consts.Locations} circle`);
+    for (const point of svgPoints) {
+      const { cx, cy } = {
+        cx: parseFloat(point.getAttribute("cx")),
+        cy: parseFloat(point.getAttribute("cy"))
+      };
+      const length = getLengthAtPoint(this.trailPath, { x: cx, y: cy });
+
+      const obj = {
+        pos: length / this.trailPathLength,
+        length,
+        on: () => point.setAttribute("fill", "red"),
+        off: () => point.setAttribute("fill", "blue")
+      };
+
+      points.push(obj);
+    }
+
+    return points.sort((a, b) => a.pos - b.pos);
   }
 }

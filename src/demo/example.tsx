@@ -1,11 +1,11 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import { Factory } from "../factory";
+import { IFactory, Factory } from "../factory";
 import weights from "./weights/japan";
 import { clamp } from "../math";
 
 const App = () => {
-  const factory = React.useRef<Factory>();
+  const factory = React.useRef<IFactory>();
   const [svgDocument, setSvgDocument] = React.useState<HTMLElement>();
   const [range, setRange] = React.useState<number>(0);
 
