@@ -264,7 +264,7 @@ export class Factory implements IFactory {
     cy: number,
     sx: number,
     sy: number,
-    angle: number
+    radians: number
   ) {
     // matrix transform encompasing a translation, rotatation about center and scaling about center
     //
@@ -276,14 +276,14 @@ export class Factory implements IFactory {
     // (-cx × sin(a) - cy × cos(a) + cy) × sy + ty + cy x (1 - sy))
 
     return `matrix(
-        ${sx * Math.cos(angle)} 
-        ${sy * Math.sin(angle)}
-        ${-sx * Math.sin(angle)} 
-        ${sy * Math.cos(angle)} 
-        ${(-cx * Math.cos(angle) + cy * Math.sin(angle) + cx) * sx +
+        ${sx * Math.cos(radians)} 
+        ${sy * Math.sin(radians)}
+        ${-sx * Math.sin(radians)} 
+        ${sy * Math.cos(radians)} 
+        ${(-cx * Math.cos(radians) + cy * Math.sin(radians) + cx) * sx +
           dx +
           cx * (1 - sx)} 
-        ${(-cx * Math.sin(angle) - cy * Math.cos(angle) + cy) * sy +
+        ${(-cx * Math.sin(radians) - cy * Math.cos(radians) + cy) * sy +
           dy +
           cy * (1 - sy)})`;
   }
