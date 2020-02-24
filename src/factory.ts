@@ -1,22 +1,22 @@
-import { getLengthAtPoint, lerp, Point } from "./math";
+import { getLengthAtPoint, lerp, CartesianCoordinate2d } from "./math";
 
-export interface IPathSection {
+export type PathSection = {
   zoom?: number[];
   weight: number;
   icon?: string;
   iconZoom?: number[];
-}
+};
 
-interface IPathSectionInternal extends IPathSection {
+type PathSectionInternal = PathSection & {
   normalizedWeight: number;
-}
+};
 
-interface IPoint {
+type PathPoint = {
   pos: number;
   length: number;
   on: () => void;
   off: () => void;
-}
+};
 
 const Consts = {
   CameraPath: "camera-path",
@@ -31,6 +31,10 @@ export interface IFactory {
   moveTrailPathToPercentage: (percentage: number) => void;
 }
 
+export interface IFactoryOptions {
+  disableCameraPath?: boolean;
+}
+
 export class Factory implements IFactory {
   private container: SVGElement;
   //
@@ -40,8 +44,8 @@ export class Factory implements IFactory {
   private cameraPath: SVGPathElement;
   private cameraPathLength: number;
   //
-  private sections: IPathSectionInternal[];
-  private points: IPoint[];
+  private sections: PathSectionInternal[];
+  private points: PathPoint[];
   //
   private x: number;
   private y: number;
@@ -50,13 +54,13 @@ export class Factory implements IFactory {
   private activeIconIndex = -1;
   private activeIcon: SVGImageElement;
   //
-  private previousPosition: Point;
+  private previousPosition: CartesianCoordinate2d;
   private previousPercentage: number;
 
   constructor(
     private readonly svg: SVGElement,
-    weights: IPathSection[],
-    private readonly disableCameraPath = false
+    weights: PathSection[],
+    private readonly options?: IFactoryOptions
   ) {
     this.container = svg.querySelector(`#${Consts.Group}`);
     this.trailPath = svg.querySelector(`#${Consts.TrailPath} path`);
@@ -67,7 +71,7 @@ export class Factory implements IFactory {
 
     this.trailPathLength = this.trailPath.getTotalLength();
 
-    if (!this.disableCameraPath) {
+    if (!this?.options?.disableCameraPath) {
       this.cameraPath = svg.querySelector(`#${Consts.CameraPath} path`);
       this.cameraPathLength = this.cameraPath?.getTotalLength();
     }
@@ -163,11 +167,11 @@ export class Factory implements IFactory {
         ) as SVGGraphicsElement;
         const { height: iconHeight, width: iconWidth } = el.getBBox();
 
-        const currentPoint: Point = {
+        const currentPoint: CartesianCoordinate2d = {
           x: trailPoint.x - iconWidth / 2,
           y: trailPoint.y - iconHeight / 2
         };
-        const previousPoint: Point = this.previousPosition
+        const previousPoint: CartesianCoordinate2d = this.previousPosition
           ? {
               x: this.previousPosition.x - iconWidth / 2,
               y: this.previousPosition.y - iconHeight / 2
@@ -262,6 +266,8 @@ export class Factory implements IFactory {
     sy: number,
     angle: number
   ) {
+    // matrix transform encompasing a translation, rotatation about center and scaling about center
+    //
     // (sx × cos(a),
     // sy × sin(a),
     // -sx × sin(a),
@@ -282,11 +288,11 @@ export class Factory implements IFactory {
           cy * (1 - sy)})`;
   }
 
-  private getIconScale(s: IPathSectionInternal, k: number) {
+  private getIconScale(s: PathSectionInternal, k: number) {
     return this.getZoom(s?.iconZoom, k);
   }
 
-  private getPageZoom(s: IPathSectionInternal, k: number) {
+  private getPageZoom(s: PathSectionInternal, k: number) {
     return this.getZoom(s?.zoom, k);
   }
 
@@ -331,7 +337,7 @@ export class Factory implements IFactory {
     return image;
   }
 
-  private createSections(weights: IPathSection[]) {
+  private createSections(weights: PathSection[]) {
     const sum = weights.reduce((x, y) => x + y.weight, 0);
     return weights.map(x => ({
       ...x,

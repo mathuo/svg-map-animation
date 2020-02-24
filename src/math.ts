@@ -1,20 +1,23 @@
-export type Point = { x: number; y: number };
+export type CartesianCoordinate2d = { x: number; y: number };
 
 const getPointAtLength = (path: SVGPathElement, length: number) => {
   const p = path.getPointAtLength(length);
-  return { x: p.x, y: p.y } as Point;
+  return { x: p.x, y: p.y } as CartesianCoordinate2d;
 };
 
 const getLength = (path: SVGPathElement) => path.getTotalLength();
 
-function distance(pointA: Point, pointB: Point) {
+function distance(
+  pointA: CartesianCoordinate2d,
+  pointB: CartesianCoordinate2d
+) {
   const d = { x: pointA.x - pointB.x, y: pointA.y - pointB.y };
   return Math.sqrt(d.x * d.x + d.y * d.y);
 }
 
 export function getLengthAtPoint(
   path: SVGPathElement,
-  point: Point,
+  point: CartesianCoordinate2d,
   subdivisionsPerIteration = 10,
   iterations = 5
 ) {

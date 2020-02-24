@@ -1,6 +1,6 @@
-import { IPathSection } from "../../factory";
+import { PathSection } from "../../factory";
 
-const weights: IPathSection[] = [
+const weights: PathSection[] = [
   {
     weight: 0,
     zoom: [1.2]
