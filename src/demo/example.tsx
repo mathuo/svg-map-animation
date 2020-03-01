@@ -1,9 +1,20 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import { IFactory, Factory } from "../factory";
-// import weights from "./weights/japan";
-import weights from "./weights/trainline";
 import { clamp } from "../math";
+
+const options = {
+  trainline: {
+    file: "./trainline.svg",
+    weights: require("./weights/trainline").default
+  },
+  japan: {
+    file: "./japan.svg",
+    weights: require("./weights/japan").default
+  }
+};
+
+const currentOptions = options.japan;
 
 const App = () => {
   const factory = React.useRef<IFactory>();
@@ -41,7 +52,7 @@ const App = () => {
       return;
     }
 
-    factory.current = new Factory(svgDocument as any, weights, {
+    factory.current = new Factory(svgDocument as any, currentOptions.weights, {
       // fixedZoom: 4
     });
   }, [svgDocument]);
@@ -67,7 +78,7 @@ const App = () => {
         />
       </div>
       <div id="map-container">
-        <object ref={refCb} data="/trainline.svg" />
+        <object ref={refCb} data={currentOptions.file} />
       </div>
     </div>
   );

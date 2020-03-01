@@ -106,14 +106,16 @@ export class Factory implements IFactory {
       this.y = y;
     }
 
-    const { width: w, height: h } = this.getViewBoxDimensions();
+    const { width: w, height: h } = this.getViewBoxDimensions(); // visible view height in pixels
+
+    const { width: svgW, height: svgH } = this.container.getBBox();
 
     let dx = Math.min(0, w / 2 - this.x) + (1 - this.scale) * this.x;
     let dy = Math.min(0, h / 2 - this.y) + (1 - this.scale) * this.y;
 
     const { width, height } = this.svg.getBBox(); // max height, width
 
-    const remainingBottom = height - h * this.scale;
+    const remainingBottom = height - svgH * this.scale;
 
     dx = Math.max(-width + w, dx);
     //TODO I haven't quite worked out why I need +remiainingBottom, but I do need it...

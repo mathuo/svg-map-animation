@@ -28,8 +28,8 @@ const weights: PathSection[] = [
   },
   {
     weight: 3,
-    zoom: [4, 2],
-    icon: "/airplane.svg"
+    zoom: [4, 2]
+    // icon: "/airplane.svg"
   }
 ];
 
