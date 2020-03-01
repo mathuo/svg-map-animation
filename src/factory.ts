@@ -1,4 +1,4 @@
-import { getLengthAtPoint, lerp, CartesianCoordinate2d } from "./math";
+import { getLengthAtPoint, lerp, CartesianCoordinate2d, clamp } from "./math";
 
 export type PathSection = {
   zoom?: number[];
@@ -23,7 +23,7 @@ const Consts = {
   TrailPath: "trail-path",
   Locations: "locations",
   TrailIcon: "trail-icon",
-  Group: "matrix-group"
+  Group: "canvas"
 };
 
 export interface IFactory {
@@ -33,10 +33,11 @@ export interface IFactory {
 
 export interface IFactoryOptions {
   disableCameraPath?: boolean;
+  fixedZoom?: number;
 }
 
 export class Factory implements IFactory {
-  private container: SVGElement;
+  private container: SVGGraphicsElement;
   //
   private trailPath: SVGPathElement;
   private trailPathLength: number;
@@ -58,7 +59,7 @@ export class Factory implements IFactory {
   private previousPercentage: number;
 
   constructor(
-    private readonly svg: SVGElement,
+    private readonly svg: SVGGraphicsElement,
     weights: PathSection[],
     private readonly options?: IFactoryOptions
   ) {
@@ -107,13 +108,19 @@ export class Factory implements IFactory {
 
     const { width: w, height: h } = this.getViewBoxDimensions();
 
+    let dx = Math.min(0, w / 2 - this.x) + (1 - this.scale) * this.x;
+    let dy = Math.min(0, h / 2 - this.y) + (1 - this.scale) * this.y;
+
+    const { width, height } = this.svg.getBBox(); // max height, width
+
+    const remainingBottom = height - h * this.scale;
+
+    dx = Math.max(-width + w, dx);
+    //TODO I haven't quite worked out why I need +remiainingBottom, but I do need it...
+    dy = Math.max(-height + h + remainingBottom, dy);
+
     // unit transform matrix is [1, 0, 0, 1, 0, 0]
-    const transform = `matrix(${this.scale} 0 0 ${this.scale} ${Math.min(
-      0,
-      w / 2 - this.x
-    ) +
-      (1 - this.scale) * this.x} ${Math.min(0, h / 2 - this.y) +
-      (1 - this.scale) * this.y})`;
+    const transform = `matrix(${this.scale} 0 0 ${this.scale} ${dx} ${dy})`;
 
     this.container.setAttribute("transform", transform);
   }
@@ -293,6 +300,9 @@ export class Factory implements IFactory {
   }
 
   private getPageZoom(s: PathSectionInternal, k: number) {
+    if (typeof this.options?.fixedZoom === "number") {
+      return this.options?.fixedZoom;
+    }
     return this.getZoom(s?.zoom, k);
   }
 

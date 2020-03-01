@@ -1,7 +1,8 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import { IFactory, Factory } from "../factory";
-import weights from "./weights/japan";
+// import weights from "./weights/japan";
+import weights from "./weights/trainline";
 import { clamp } from "../math";
 
 const App = () => {
@@ -40,7 +41,9 @@ const App = () => {
       return;
     }
 
-    factory.current = new Factory(svgDocument as any, weights);
+    factory.current = new Factory(svgDocument as any, weights, {
+      // fixedZoom: 4
+    });
   }, [svgDocument]);
 
   return (
@@ -64,7 +67,7 @@ const App = () => {
         />
       </div>
       <div id="map-container">
-        <object ref={refCb} data="/japan.svg" />
+        <object ref={refCb} data="/trainline.svg" />
       </div>
     </div>
   );

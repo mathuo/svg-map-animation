@@ -4,7 +4,7 @@ viewBox="0 0 500 120"
 fill="none"
 xmlns="http://www.w3.org/2000/svg"
 >
-<g id="matrix-group" clip-path="url(#clip0)">
+<g id="canvas" clip-path="url(#clip0)">
 <g id="map">
     <path
     id="Vector"
@@ -381,9 +381,4 @@ xmlns="http://www.w3.org/2000/svg"
     />
 </g>
 </g>
-<defs>
-<clipPath id="clip0">
-    <rect width="455.814" height="400" fill="white" />
-</clipPath>
-</defs>
 </svg>
