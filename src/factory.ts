@@ -29,11 +29,13 @@ const Consts = {
 export interface IFactory {
   redraw: (kvargs: { scale?: number; x?: number; y?: number }) => void;
   moveTrailPathToPercentage: (percentage: number) => void;
+  dispose: () => void;
 }
 
 export interface IFactoryOptions {
   disableCameraPath?: boolean;
   fixedZoom?: number;
+  disableAspectRatio?: boolean;
 }
 
 export class Factory implements IFactory {
@@ -63,8 +65,14 @@ export class Factory implements IFactory {
     weights: PathSection[],
     private readonly options?: IFactoryOptions
   ) {
+    this.createStylesheet("styles.css");
+
     this.container = svg.querySelector(`#${Consts.Group}`);
     this.trailPath = svg.querySelector(`#${Consts.TrailPath} path`);
+
+    if (this.options?.disableAspectRatio) {
+      svg.setAttribute("preserveAspectRatio", "none");
+    }
 
     if (!this.trailPath) {
       throw new Error(`#${Consts.TrailPath} path is missing`);
@@ -84,11 +92,18 @@ export class Factory implements IFactory {
     this.points = this.createPoints();
 
     if (this.sections && this.sections.length !== this.points.length) {
-      throw new Error("sections.lenth !== points.length");
+      throw new Error(
+        `sections.lenth (${this.sections.length}) !== points.length (${this.points.length})`
+      );
     }
 
     const { x, y } = this.trailPath.getPointAtLength(0);
     this.redraw({ x, y });
+  }
+
+  public dispose() {
+    this.activeIcon?.remove();
+    this.activeIconIndex = -1;
   }
 
   public redraw(kvargs: { scale?: number; x?: number; y?: number }) {
@@ -224,7 +239,9 @@ export class Factory implements IFactory {
     if (hasCameraPath) {
       const cameraPathStroke =
         this.cameraPathLength * normPerc + " " + this.cameraPathLength;
-      this.cameraPath.setAttribute("stroke-dasharray", cameraPathStroke); //stroke-width for width
+      this.cameraPath.setAttribute("stroke-dasharray", `${cameraPathStroke}`); //stroke-width for width
+      this.cameraPath.setAttribute("stroke", "none");
+      this.trailPath.setAttribute("stroke-width", "1px");
 
       this.redraw({ x: cameraPoint.x, y: cameraPoint.y, scale: pageScale });
     } else {
@@ -234,6 +251,9 @@ export class Factory implements IFactory {
     const trailPathStroke =
       this.trailPathLength * normPerc + " " + this.trailPathLength;
     this.trailPath.setAttribute("stroke-dasharray", trailPathStroke); //stroke-width for width
+    this.trailPath.setAttribute("stroke-width", "5px");
+    this.trailPath.setAttribute("stroke", "orange");
+    this.trailPath.setAttribute("stroke-opacity", "0.8");
 
     this.points.forEach(x => {
       if (x.pos > normPerc) {
@@ -357,21 +377,60 @@ export class Factory implements IFactory {
     }));
   }
 
+  private createStylesheet(path: string) {
+    //   <defs>
+    //   <link href="styles.css" type="text/css" rel="stylesheet"
+    //         xmlns="http://www.w3.org/1999/xhtml"/>
+    // </defs>
+
+    const link = document.createElementNS(
+      "http://www.w3.org/1999/xhtml",
+      "link"
+    );
+    link.setAttribute("href", path);
+    link.setAttribute("type", "text/css");
+    link.setAttribute("rel", "stylesheet");
+
+    const defs = this.svg.querySelector("defs");
+    if (defs) {
+      defs.appendChild(link);
+    } else {
+      const def = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "defs"
+      );
+      def.appendChild(link);
+      this.svg.appendChild(def);
+    }
+  }
+
   private createPoints() {
     const points = [];
-    const svgPoints = this.svg.querySelectorAll(`#${Consts.Locations} circle`);
+    const svgPoints = this.svg.querySelectorAll(`#${Consts.Locations}`)[0]
+      .children;
     for (const point of svgPoints) {
-      const { cx, cy } = {
-        cx: parseFloat(point.getAttribute("cx")),
-        cy: parseFloat(point.getAttribute("cy"))
-      };
-      const length = getLengthAtPoint(this.trailPath, { x: cx, y: cy });
+      // const { cx, cy } = {
+      //   cx: parseFloat(point.getAttribute("x")),
+      //   cy: parseFloat(point.getAttribute("y"))
+      // };(
+      const { x, y } = (point as SVGGraphicsElement).getBBox();
+      const length = getLengthAtPoint(this.trailPath, { x, y });
 
       const obj = {
         pos: length / this.trailPathLength,
         length,
-        on: () => point.setAttribute("fill", "red"),
-        off: () => point.setAttribute("fill", "blue")
+        on: () => {
+          if (!point.classList.contains("point-visited")) {
+            point.classList.add("point-visited");
+          }
+          // point.setAttribute("fill", "red");
+        },
+        off: () => {
+          // point.setAttribute("fill", "blue");
+          if (point.classList.contains("point-visited")) {
+            point.classList.remove("point-visited");
+          }
+        }
       };
 
       points.push(obj);

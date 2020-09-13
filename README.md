@@ -9,3 +9,6 @@
 - https://stackoverflow.com/questions/46138256/css-js-animate-image-along-path-and-make-dashes-afterwards
 - https://codepen.io/absentees/pen/qOYRQO
 - https://bl.ocks.org/seemantk/80613e25e9804934608ac42440562168
+
+## SVG Articles
+- https://css-tricks.com/scale-svg/
